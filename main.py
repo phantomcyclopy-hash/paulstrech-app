@@ -1,7 +1,7 @@
 import os
 import threading
 import numpy as np
-import soundfile as sf
+import scipy.io.wavfile as wav
 import flet as ft
 
 from pydub import AudioSegment
@@ -206,8 +206,10 @@ def main(page: ft.Page):
                 np.abs(samples)
             )
 
-            if max_val > 0:
-                samples /= max_val
+            if max_val == 0:
+                max_val = 1.0
+
+            samples /= max_val
 
             stretch = float(
                 stretch_field.value
@@ -285,11 +287,10 @@ def main(page: ft.Page):
                 + ".wav"
             )
 
-            sf.write(
+            wav.write(
                 out_path,
-                output,
                 audio.frame_rate,
-                subtype="PCM_16"
+                (output * 32767).astype(np.int16)
             )
 
             status_text.value = (
