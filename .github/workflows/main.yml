@@ -16,7 +16,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: "3.11"
 
     - name: Install Flet CLI
       run: |
@@ -26,36 +26,24 @@ jobs:
     - name: Setup Java JDK
       uses: actions/setup-java@v4
       with:
-        distribution: 'temurin'
-        java-version: '17'
+        distribution: temurin
+        java-version: "17"
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.19.x'
-        channel: 'stable'
+        flutter-version: "3.19.x"
+        channel: stable
 
-    - name: Pre-install Android Mobile Binaries
-      run: |
-        # Criamos a pasta onde o Flet guarda os pacotes do app
-        mkdir -p __pypackages__/3.11/lib/python3.11/site-packages
-        
-        # Descarregamos os binários prontos (wheels) sem compilar absolutamente nada
-        pip download --only-binary=:all: --platform manylinux2014_aarch64 --implementation cp --python-version 3.11 --dest /tmp/wheels numpy scipy
-        
-        # Instalamos os pacotes diretamente na estrutura de pastas do projeto
-        pip install --target __pypackages__/3.11/lib/python3.11/site-packages --no-index --find-links=/tmp/wheels numpy scipy
-
-    - name: Build APK (Automated Mode)
+    - name: Build APK
       env:
         CI: "true"
         FLET_CI: "1"
         FLET_NON_INTERACTIVE: "true"
         FLET_ANALYTICS_OPTOUT: "1"
-        PUB_ENVIRONMENT: "bot.github_actions"
       run: |
         flet build apk
-        
+
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
