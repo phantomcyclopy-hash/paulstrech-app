@@ -44,7 +44,8 @@ jobs:
         FLET_ANALYTICS_OPTOUT: "1"
         PUB_ENVIRONMENT: "bot.github_actions"
       run: |
-        flet build apk
+        flet build apk --target-arch aarch64
+
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
