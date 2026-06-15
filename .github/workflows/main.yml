@@ -50,8 +50,7 @@ jobs:
           FLET_NON_INTERACTIVE: "true"
           FLET_ANALYTICS_OPTOUT: "1"
         run: |
-          # Adicionamos o index extra do Kivy-wheels que possui pacotes numéricos pré-compilados para Android arm64
-          flet build apk --pip-args="--extra-index-url https://pypi.kivy.org/simple/"
+          flet build apk
 
 
       - name: Upload APK
