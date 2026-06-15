@@ -36,7 +36,7 @@ jobs:
         channel: 'stable'
 
     - name: Build APK with Permissions
-     run: |
+      run: |
         flet build apk --include-permissions-android MANAGE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
 
     - name: Upload APK Artifact
