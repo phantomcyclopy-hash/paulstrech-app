@@ -7,9 +7,9 @@ on:
 
 jobs:
   build:
-    runs-runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      FORCE_JUST_USE_NODE24: "true"
 
     steps:
     - name: Checkout Code
@@ -46,8 +46,8 @@ jobs:
       run: |
         flet build apk --no-hooks
         
-     - name: Upload APK Artifact
-       uses: actions/upload-artifact@v4
-       with:
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
         name: paulstretch-apk
         path: build/apk/*.apk
