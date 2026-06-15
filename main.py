@@ -3,179 +3,420 @@ import threading
 import numpy as np
 import scipy.io.wavfile as wav
 import flet as ft
+
 from pydub import AudioSegment
+from engine import PaulStretchEngine
 
-# --- MOTOR MATEMÁTICO DO PAULSTRETCH ---
-def paulstretch(samplerate, smp, stretch, windowsize_seconds=0.25):
-    n = len(smp)
-    n_window = int(windowsize_seconds * samplerate)
-    if n_window % 2 == 1: n_window += 1
-    half_n_window = n_window // 2
-    
-    hop = int(half_n_window / stretch)
-    if hop == 0: hop = 1
-    
-    window = np.hanning(n_window)
-    out_len = int(n * stretch) + n_window
-    output = np.zeros(out_len)
-    
-    pos = 0
-    out_pos = 0
-    while pos + n_window < n:
-        chunk = smp[pos:pos+n_window] * window
-        freq = np.fft.rfft(chunk)
-        phases = np.random.uniform(0, 2 * np.pi, len(freq))
-        freq = np.abs(freq) * np.exp(1j * phases)
-        
-        chunk_out = np.fft.irfft(freq) * window
-        output[out_pos:out_pos+n_window] += chunk_out
-        
-        pos += hop
-        out_pos += half_n_window
-        
-    return output[:int(n*stretch)]
 
-# --- INTERFACE DO APLICATIVO ---
+def format_time(seconds):
+    seconds = int(seconds)
+
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+
+    if h > 0:
+        return f"{h:02d}:{m:02d}:{s:02d}"
+
+    return f"{m:02d}:{s:02d}"
+
+
 def main(page: ft.Page):
     page.title = "PaulStretch Studio"
     page.theme_mode = ft.ThemeMode.DARK
-    page.vertical_alignment = ft.MainAxisAlignment.CENTER
-    page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.padding = 20
+    page.window_width = 500
 
-    selected_file_path = None
+    selected_file = None
+    current_engine = None
 
-    # Componentes Visuais da Interface Moderna
-    title = ft.Text("PaulStretch Studio", size=26, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_400)
-    subtitle = ft.Text("Texturas Espectrais Portáteis", size=14, color=ft.Colors.GREY_400)
-    
-    lbl_file = ft.Text("Nenhum arquivo selecionado", color=ft.Colors.GREY_500, italic=True, text_align=ft.TextAlign.CENTER)
-    
-    txt_stretch = ft.TextField(label="Fator de Esticamento", value="10.0", width=280, keyboard_type=ft.KeyboardType.NUMBER)
-    txt_window = ft.TextField(label="Tamanho da Janela (segundos)", value="0.25", width=280, keyboard_type=ft.KeyboardType.NUMBER)
-    txt_output_name = ft.TextField(label="Nome do arquivo de saída", value="resultado_espectral", width=280)
-    
-    btn_process = ft.ElevatedButton("Esticar Áudio", icon=ft.Icons.AUDIO_FILE, disabled=True, bgcolor=ft.Colors.BLUE_700, color=ft.Colors.WHITE, width=220)
-    progress_ring = ft.ProgressRing(visible=False)
-    lbl_status = ft.Text("", size=14, weight=ft.FontWeight.W_500, text_align=ft.TextAlign.CENTER)
+    # -------------------------
+    # UI
+    # -------------------------
 
-    def process_audio_thread(file_path, stretch_factor, window_size, out_name):
-        try:
-            lbl_status.value = "A abrir e converter o áudio..."
-            page.update()
-            
-            # Pydub lê os formatos suportados usando o decoder nativo do APK
-            audio = AudioSegment.from_file(file_path)
-            samplerate = audio.frame_rate
-            
-            # Converte os dados brutos para array do numpy
-            samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
-            
-            # Normalização de ganho
-            max_val = np.max(np.abs(samples)) if len(samples) > 0 else 1
-            if max_val == 0: max_val = 1
-            samples /= max_val
-            
-            # Processamento de canais (Estéreo vs Mono)
-            if audio.channels > 1:
-                lbl_status.value = "A processar canais Estéreo...\n(Isto pode levar alguns segundos)"
-                page.update()
-                samples = samples.reshape((-1, audio.channels))
-                left = paulstretch(samplerate, samples[:, 0], stretch_factor, window_size)
-                right = paulstretch(samplerate, samples[:, 1], stretch_factor, window_size)
-                out_data = np.vstack((left, right)).T
-            else:
-                lbl_status.value = "A processar canal Mono..."
-                page.update()
-                out_data = paulstretch(samplerate, samples, stretch_factor, window_size)
-            
-            # Pasta de Downloads pública do Android para não dar erro de permissão restrita
-            output_dir = "/storage/emulated/0/Download"
-            if not os.path.exists(output_dir):
-                output_dir = os.path.dirname(file_path)
-                
-            final_path = os.path.join(output_dir, f"{out_name}.wav")
-            
-            lbl_status.value = "A renderizar o ficheiro WAV final..."
-            page.update()
-            
-            # Exportação estável convertendo para 16-bit PCM
-            wav.write(final_path, samplerate, (out_data * 32767).astype(np.int16))
-            
-            lbl_status.value = f"Sucesso!\nGuardado em Downloads como:\n{out_name}.wav"
-            lbl_status.color = ft.Colors.GREEN_400
-        except Exception as e:
-            lbl_status.value = f"Erro: {str(e)}"
-            lbl_status.color = ft.Colors.RED_400
-        finally:
-            progress_ring.visible = False
-            btn_process.disabled = False
-            page.update()
-
-    def on_process_click(e):
-        btn_process.disabled = True
-        progress_ring.visible = True
-        lbl_status.value = "A iniciar motor espectral..."
-        lbl_status.color = ft.Colors.WHITE
-        page.update()
-        
-        stretch_val = float(txt_stretch.value)
-        window_val = float(txt_window.value)
-        output_val = txt_output_name.value.strip()
-        
-        threading.Thread(target=process_audio_thread, args=(selected_file_path, stretch_val, window_val, output_val), daemon=True).start()
-
-    def on_file_picker_result(e: ft.FilePickerResultEvent):
-        nonlocal selected_file_path
-        if e.files:
-            selected_file_path = e.files[0].path
-            lbl_file.value = f"Selecionado: {e.files[0].name}"
-            lbl_file.color = ft.Colors.BLUE_200
-            btn_process.disabled = False
-            
-            base_name = os.path.splitext(e.files[0].name)[0]
-            txt_output_name.value = f"{base_name}_spectral"
-        else:
-            lbl_file.value = "Seleção cancelada"
-            btn_process.disabled = True
-        page.update()
-
-    file_picker = ft.FilePicker(on_result=on_file_picker_result)
-    page.overlay.append(file_picker)
-
-    btn_select = ft.OutlinedButton(
-        "Selecionar Ficheiro de Áudio",
-        icon=ft.Icons.FOLDER_OPEN,
-        on_click=lambda _: file_picker.pick_files(allow_multiple=False)
+    title = ft.Text(
+        "PaulStretch Studio",
+        size=28,
+        weight=ft.FontWeight.BOLD
     )
-    
-    btn_process.on_click = on_process_click
+
+    subtitle = ft.Text(
+        "Extreme Spectral Time Stretching"
+    )
+
+    file_name = ft.Text(
+        "Nenhum arquivo selecionado"
+    )
+
+    info_duration = ft.Text("-")
+    info_samplerate = ft.Text("-")
+    info_channels = ft.Text("-")
+
+    stretch_field = ft.TextField(
+        label="Stretch",
+        value="10",
+        keyboard_type=ft.KeyboardType.NUMBER
+    )
+
+    window_field = ft.TextField(
+        label="Window Size (segundos)",
+        value="0.25",
+        keyboard_type=ft.KeyboardType.NUMBER
+    )
+
+    output_field = ft.TextField(
+        label="Nome do arquivo"
+    )
+
+    estimated_duration = ft.Text(
+        "Duração estimada: -"
+    )
+
+    progress_bar = ft.ProgressBar(
+        value=0,
+        visible=False
+    )
+
+    status_text = ft.Text()
+
+    process_button = ft.ElevatedButton(
+        "Processar",
+        disabled=True
+    )
+
+    cancel_button = ft.OutlinedButton(
+        "Cancelar",
+        visible=False
+    )
+
+    # -------------------------
+    # Atualiza duração prevista
+    # -------------------------
+
+    def update_estimation(e=None):
+        try:
+            if not selected_file:
+                return
+
+            audio = AudioSegment.from_file(
+                selected_file
+            )
+
+            stretch = float(
+                stretch_field.value
+            )
+
+            final_duration = (
+                audio.duration_seconds
+                * stretch
+            )
+
+            estimated_duration.value = (
+                f"Duração estimada: "
+                f"{format_time(final_duration)}"
+            )
+
+            page.update()
+
+        except:
+            pass
+
+    stretch_field.on_change = update_estimation
+
+    # -------------------------
+    # File Picker
+    # -------------------------
+
+    def file_selected(e):
+        nonlocal selected_file
+
+        if not e.files:
+            return
+
+        selected_file = e.files[0].path
+
+        audio = AudioSegment.from_file(
+            selected_file
+        )
+
+        file_name.value = e.files[0].name
+
+        info_duration.value = format_time(
+            audio.duration_seconds
+        )
+
+        info_samplerate.value = (
+            f"{audio.frame_rate} Hz"
+        )
+
+        info_channels.value = (
+            str(audio.channels)
+        )
+
+        output_field.value = (
+            os.path.splitext(
+                e.files[0].name
+            )[0]
+            + "_stretched"
+        )
+
+        process_button.disabled = False
+
+        update_estimation()
+
+        page.update()
+
+    picker = ft.FilePicker(
+        on_result=file_selected
+    )
+
+    page.overlay.append(picker)
+
+    select_button = ft.ElevatedButton(
+        "Selecionar Áudio",
+        icon=ft.Icons.FOLDER_OPEN,
+        on_click=lambda _:
+        picker.pick_files(
+            allow_multiple=False
+        )
+    )
+
+    # -------------------------
+    # Processamento
+    # -------------------------
+
+    def update_progress(value):
+        progress_bar.value = value
+        page.update()
+
+    def process_thread():
+        nonlocal current_engine
+
+        try:
+            audio = AudioSegment.from_file(
+                selected_file
+            )
+
+            samples = np.array(
+                audio.get_array_of_samples(),
+                dtype=np.float32
+            )
+
+            max_val = np.max(
+                np.abs(samples)
+            )
+
+            if max_val > 0:
+                samples /= max_val
+
+            stretch = float(
+                stretch_field.value
+            )
+
+            window_size = float(
+                window_field.value
+            )
+
+            current_engine = (
+                PaulStretchEngine(
+                    samplerate=audio.frame_rate,
+                    stretch=stretch,
+                    window_size=window_size
+                )
+            )
+
+            status_text.value = (
+                "Processando..."
+            )
+
+            page.update()
+
+            if audio.channels == 2:
+
+                samples = samples.reshape(
+                    (-1, 2)
+                )
+
+                left = current_engine.process(
+                    samples[:, 0],
+                    update_progress
+                )
+
+                right = current_engine.process(
+                    samples[:, 1]
+                )
+
+                if left is None:
+                    return
+
+                output = np.column_stack(
+                    (
+                        left,
+                        right
+                    )
+                )
+
+            else:
+
+                output = (
+                    current_engine.process(
+                        samples,
+                        update_progress
+                    )
+                )
+
+                if output is None:
+                    return
+
+            output_dir = (
+                "/storage/emulated/0/Download"
+            )
+
+            if not os.path.exists(
+                output_dir
+            ):
+                output_dir = os.path.dirname(
+                    selected_file
+                )
+
+            out_path = os.path.join(
+                output_dir,
+                output_field.value
+                + ".wav"
+            )
+
+            wav.write(
+                out_path,
+                audio.frame_rate,
+                (
+                    output * 32767
+                ).astype(np.int16)
+            )
+
+            status_text.value = (
+                f"Concluído!\n{out_path}"
+            )
+
+        except Exception as ex:
+
+            status_text.value = (
+                f"Erro:\n{str(ex)}"
+            )
+
+        finally:
+
+            progress_bar.visible = False
+            cancel_button.visible = False
+            process_button.disabled = False
+
+            page.update()
+
+    def start_processing(e):
+
+        if not selected_file:
+            return
+
+        progress_bar.visible = True
+        progress_bar.value = 0
+
+        process_button.disabled = True
+        cancel_button.visible = True
+
+        page.update()
+
+        threading.Thread(
+            target=process_thread,
+            daemon=True
+        ).start()
+
+    process_button.on_click = (
+        start_processing
+    )
+
+    # -------------------------
+    # Cancelamento
+    # -------------------------
+
+    def cancel_processing(e):
+
+        nonlocal current_engine
+
+        if current_engine:
+            current_engine.cancel()
+
+        status_text.value = (
+            "Cancelado."
+        )
+
+        page.update()
+
+    cancel_button.on_click = (
+        cancel_processing
+    )
+
+    # -------------------------
+    # Layout
+    # -------------------------
 
     page.add(
         ft.Card(
             content=ft.Container(
+                padding=20,
+                width=450,
                 content=ft.Column(
-                    [
+                    controls=[
                         title,
                         subtitle,
-                        ft.Divider(height=15, color=ft.Colors.TRANSPARENT),
-                        btn_select,
-                        lbl_file,
-                        ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
-                        txt_stretch,
-                        txt_window,
-                        txt_output_name,
-                        ft.Divider(height=15, color=ft.Colors.TRANSPARENT),
-                        btn_process,
-                        progress_ring,
-                        lbl_status
-                    ],
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=12
-                ),
-                padding=20
+
+                        ft.Divider(),
+
+                        select_button,
+                        file_name,
+
+                        ft.Divider(),
+
+                        ft.Text(
+                            "Informações"
+                        ),
+
+                        ft.Row([
+                            ft.Text(
+                                "Duração:"
+                            ),
+                            info_duration
+                        ]),
+
+                        ft.Row([
+                            ft.Text(
+                                "Sample Rate:"
+                            ),
+                            info_samplerate
+                        ]),
+
+                        ft.Row([
+                            ft.Text(
+                                "Canais:"
+                            ),
+                            info_channels
+                        ]),
+
+                        stretch_field,
+                        window_field,
+                        output_field,
+
+                        estimated_duration,
+
+                        progress_bar,
+
+                        process_button,
+                        cancel_button,
+
+                        status_text
+                    ]
+                )
             )
         )
     )
+
 
 ft.app(target=main)
