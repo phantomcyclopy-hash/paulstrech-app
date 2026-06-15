@@ -8,8 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JUST_USE_NODE24: "true"
 
     steps:
     - name: Checkout Code
@@ -23,7 +21,7 @@ jobs:
     - name: Install Flet CLI
       run: |
         python -m pip install --upgrade pip
-        pip install flet==0.22.0 numpy scipy
+        pip install flet==0.22.0
 
     - name: Setup Java JDK
       uses: actions/setup-java@v4
@@ -36,6 +34,17 @@ jobs:
       with:
         flutter-version: '3.19.x'
         channel: 'stable'
+
+    - name: Pre-install Android Mobile Binaries
+      run: |
+        # Criamos a pasta onde o Flet guarda os pacotes do app
+        mkdir -p __pypackages__/3.11/lib/python3.11/site-packages
+        
+        # Descarregamos os binários prontos (wheels) sem compilar absolutamente nada
+        pip download --only-binary=:all: --platform manylinux2014_aarch64 --implementation cp --python-version 3.11 --dest /tmp/wheels numpy scipy
+        
+        # Instalamos os pacotes diretamente na estrutura de pastas do projeto
+        pip install --target __pypackages__/3.11/lib/python3.11/site-packages --no-index --find-links=/tmp/wheels numpy scipy
 
     - name: Build APK (Automated Mode)
       env:
