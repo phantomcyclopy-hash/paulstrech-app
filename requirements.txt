@@ -1,4 +1,4 @@
-flet>=0.28.0
-numpy>=2.0.0
-soundfile
+flet
 pydub
+scipy
+numpy
