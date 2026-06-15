@@ -1,4 +1,4 @@
-flet==0.22.0
-numpy==1.26.4
-pydub
+flet>=0.28.0
+numpy>=2.0.0
 soundfile
+pydub
