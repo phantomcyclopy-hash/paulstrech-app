@@ -202,91 +202,84 @@ def main(page: ft.Page):
                 dtype=np.float32
             )
 
-            max_val = np.max(
-                np.abs(samples)
-            )
-
-            if max_val == 0:
+            # Prevenção de divisão por zero na normalização inicial
+            max_val = np.max(np.abs(samples))
+            if max_val < 1e-12:
                 max_val = 1.0
-
             samples /= max_val
 
-            stretch = float(
-                stretch_field.value
+            stretch = float(stretch_field.value)
+            window_size = float(window_field.value)
+
+            current_engine = PaulStretchEngine(
+                samplerate=audio.frame_rate,
+                stretch=stretch,
+                window_size=window_size
             )
 
-            window_size = float(
-                window_field.value
-            )
-
-            current_engine = (
-                PaulStretchEngine(
-                    samplerate=audio.frame_rate,
-                    stretch=stretch,
-                    window_size=window_size
-                )
-            )
-
-            status_text.value = (
-                "Processando..."
-            )
-
+            status_text.value = "Processando em streaming..."
             page.update()
 
-            if audio.channels == 2:
-
-                samples = samples.reshape(
-                    (-1, 2)
-                )
-
-                left = current_engine.process(
-                    samples[:, 0],
-                    update_progress
-                )
-
-                right = current_engine.process(
-                    samples[:, 1]
-                )
-
-                if left is None:
-                    return
-
-                output = np.column_stack(
-                    (
-                        left,
-                        right
-                    )
-                )
-
-            else:
-
-                output = (
-                    current_engine.process(
-                        samples,
-                        update_progress
-                    )
-                )
-
-                if output is None:
-                    return
-
-            output_dir = (
-                "/storage/emulated/0/Download"
-            )
-
-            if not os.path.exists(
-                output_dir
-            ):
-                output_dir = os.path.dirname(
-                    selected_file
-                )
+            output_dir = "/storage/emulated/0/Download"
+            if not os.path.exists(output_dir):
+                output_dir = os.path.dirname(selected_file)
 
             out_path = os.path.join(
                 output_dir,
-                output_field.value
-                + ".wav"
+                output_field.value + ".wav"
             )
 
+            # Consumo do gerador por blocos para evitar picos de RAM
+            if audio.channels == 2:
+                samples = samples.reshape((-1, 2))
+                
+                stream_left = current_engine.process_stream(samples[:, 0])
+                stream_right = current_engine.process_stream(samples[:, 1])
+
+                chunks_left = []
+                chunks_right = []
+
+                for item in stream_left:
+                    if current_engine.cancelled or item is None:
+                        return
+                    chunk, progress = item
+                    chunks_left.append(chunk)
+                    update_progress(progress * 0.5)
+
+                for item in stream_right:
+                    if current_engine.cancelled or item is None:
+                        return
+                    chunk, progress = item
+                    chunks_right.append(chunk)
+                    update_progress(0.5 + (progress * 0.5))
+
+                out_left = np.concatenate(chunks_left)
+                out_right = np.concatenate(chunks_right)
+                
+                min_len = min(len(out_left), len(out_right))
+                output = np.column_stack(
+                    (out_left[:min_len], out_right[:min_len])
+                )
+            else:
+                stream = current_engine.process_stream(samples)
+                chunks = []
+                
+                for item in stream:
+                    if current_engine.cancelled or item is None:
+                        return
+                    chunk, progress = item
+                    chunks.append(chunk)
+                    update_progress(progress)
+                
+                output = np.concatenate(chunks)
+
+            # Normalização final anti-clipping e tratamento de silêncio
+            peak = np.max(np.abs(output))
+            if peak < 1e-12:
+                peak = 1.0
+            output /= peak
+
+            # Salvando via Scipy convertendo rigidamente para PCM Int16
             wav.write(
                 out_path,
                 audio.frame_rate,
@@ -298,21 +291,17 @@ def main(page: ft.Page):
             )
 
         except Exception as ex:
-
             status_text.value = (
                 f"Erro:\n{str(ex)}"
             )
 
         finally:
-
             progress_bar.visible = False
             cancel_button.visible = False
             process_button.disabled = False
-
             page.update()
 
     def start_processing(e):
-
         if not selected_file:
             return
 
@@ -338,7 +327,6 @@ def main(page: ft.Page):
     # -------------------------
 
     def cancel_processing(e):
-
         nonlocal current_engine
 
         if current_engine:
