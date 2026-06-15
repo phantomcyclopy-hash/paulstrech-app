@@ -37,8 +37,7 @@ jobs:
 
     - name: Build APK
       run: |
-        flet build apk --no-interactive
-
+        flet build apk
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
