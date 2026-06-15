@@ -1,1 +1,4 @@
 flet==0.22.0
+numpy==1.26.4
+pydub
+soundfile
