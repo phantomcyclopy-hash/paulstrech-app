@@ -11,7 +11,3 @@ android:
     - name: android.permission.READ_EXTERNAL_STORAGE
     - name: android.permission.WRITE_EXTERNAL_STORAGE
     - name: android.permission.MANAGE_EXTERNAL_STORAGE
-  # Adicione estas linhas abaixo:
-  pip_args:
-    - "--extra-index-url"
-    - "https://pypi.org/simple"
