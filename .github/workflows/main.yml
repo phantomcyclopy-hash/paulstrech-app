@@ -19,11 +19,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: 'pip' # Otimiza o tempo de build cacheando os downloads do pip
 
-      - name: Install Flet
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgfortran5
+
+      - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install flet
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -43,7 +50,8 @@ jobs:
           FLET_NON_INTERACTIVE: "true"
           FLET_ANALYTICS_OPTOUT: "1"
         run: |
-          yes | flet build apk
+          # O Flet precisa ler o flet.yaml e o requirements.txt na raiz do projeto
+          flet build apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
