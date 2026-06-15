@@ -1,4 +1,0 @@
-flet==0.22.0
-numpy
-scipy
-pydub
