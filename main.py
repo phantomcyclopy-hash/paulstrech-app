@@ -1,7 +1,7 @@
 import os
 import threading
 import numpy as np
-import scipy.io.wavfile as wav
+import soundfile as sf
 import flet as ft
 
 from pydub import AudioSegment
@@ -285,12 +285,11 @@ def main(page: ft.Page):
                 + ".wav"
             )
 
-            wav.write(
+            sf.write(
                 out_path,
+                output,
                 audio.frame_rate,
-                (
-                    output * 32767
-                ).astype(np.int16)
+                subtype="PCM_16"
             )
 
             status_text.value = (
