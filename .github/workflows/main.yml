@@ -18,10 +18,11 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install Flet CLI
+    - name: Install Dependencies and Flet
       run: |
         python -m pip install --upgrade pip
         pip install flet
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
     - name: Setup Java JDK
       uses: actions/setup-java@v4
@@ -34,6 +35,21 @@ jobs:
       with:
         flutter-version: '3.19.x'
         channel: 'stable'
+
+    - name: Build APK (Silent Mode)
+      env:
+        CI: "true"
+        FLET_CI: "1"
+        FLET_ANALYTICS_OPTOUT: "1"
+        PUB_ENVIRONMENT: "bot.github_actions"
+      run: |
+        flet build apk
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: paulstretch-apk
+        path: build/apk/*.apk
 
     - name: Build APK
       run: |
