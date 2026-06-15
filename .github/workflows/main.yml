@@ -50,8 +50,9 @@ jobs:
           FLET_NON_INTERACTIVE: "true"
           FLET_ANALYTICS_OPTOUT: "1"
         run: |
-          # O Flet precisa ler o flet.yaml e o requirements.txt na raiz do projeto
-          flet build apk
+          # Adicionamos o index extra do Kivy-wheels que possui pacotes numéricos pré-compilados para Android arm64
+          flet build apk --pip-args="--extra-index-url https://pypi.kivy.org/simple/"
+
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
